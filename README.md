@@ -20,8 +20,10 @@
 *   **机器人中心坐标系 (Robo-Centric)**: 所有计算均在 Body Frame 下实时生成，无需全局地图，天然适配动态环境避障。
 *   **高速 $O(1)$ 查询**: 基于双线性插值（Bilinear Interpolation），单次查询耗时仅约 **2.4 μs**（测试环境：普通移动端 CPU），满足极致的实时性需求。
 *   **解析梯度 (Analytic Gradient)**: 提供连续、平滑的一阶解析梯度，确保基于梯度的优化器（如 g2o, Ceres, NLopt）能够快速且稳定地收敛。
+*   **动态障碍物更新**: 支持添加、删除障碍物，增量更新 ESDF 场。
+*   **Octree 空间索引**: 使用 PCL Octree 加速最近障碍物查找，复杂度从 O(N) 降至 O(log N)。
 *   **可视化辅助**: 内置基于 OpenCV 的诊断工具，可直观对比物理轮廓（Yellow Box）与离散场（SDF Field）的对齐准确度。
-*   **轻量化设计**: 仅依赖 Eigen3 核心库，易于集成到现有的 ROS 或嵌入式导航系统中。
+*   **轻量化设计**: 仅依赖 Eigen3 + OpenCV + PCL，易于集成到现有的 ROS 或嵌入式导航系统中。
 
 ---
 
@@ -42,6 +44,7 @@
 ### 依赖 (Dependencies)
 *   [Eigen3](http://eigen.tuxfamily.org/) (核心计算)
 *   [OpenCV](https://opencv.org/) (可选，仅用于可视化调试)
+*   [PCL](https://pointclouds.org/) (用于 Octree 空间索引加速)
 *   CMake (>= 3.10)
 
 ### 编译与运行 (Build)
@@ -82,14 +85,36 @@ if (esdf.query(Eigen::Vector2d(0.4, 0.2), dist, grad)) {
 }
 ```
 
+### 动态障碍物更新 (Obstacle Management)
+```cpp
+// 添加障碍物点
+std::vector<Eigen::Vector2d> obstacles;
+obstacles.push_back(Eigen::Vector2d(1.0, 0.0));
+obstacles.push_back(Eigen::Vector2d(1.5, 0.5));
+esdf.addObstacles(obstacles);
+
+// 更新 ESDF (使用 Octree 加速查找)
+esdf.updateEsdfWithObstacles();
+
+// 移除范围内的障碍物
+esdf.removeObstaclesInRadius(Eigen::Vector2d(1.0, 0.0), 1.0);
+
+// 清除所有障碍物
+esdf.clearObstacles();
+```
+
+### Octree 优化 (Performance)
+*   使用 PCL Octree 进行最近障碍物查找
+*   复杂度从 O(N) 降低到 O(log N)
+*   适用于大规模障碍物场景
+```
+
 ---
 
 ## 🛠 应用场景 (Applications)
 *   **TEB Local Planner**: 增强碰撞检测逻辑，为非圆形状机器人提供更精确的代价约束。
 *   **轨迹优化 (Trajectory Optimization)**: 在 MPC 或 EGO-Planner 框架中作为硬约束或惩罚项。
 *   **势场法导航**: 生成高质量、无震荡的斥力场。
-
----
 
 
 ## 📄 协议 (License)

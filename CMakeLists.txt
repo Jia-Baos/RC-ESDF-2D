@@ -10,6 +10,12 @@ find_package(Eigen3 REQUIRED)
 
 find_package(OpenCV REQUIRED)
 
+find_package(PCL REQUIRED)
+if(PCL_FOUND)
+    include_directories(${PCL_INCLUDE_DIRS})
+    add_definitions(${PCL_DEFINITIONS})
+endif()
+
 include_directories(${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 
 include_directories(
@@ -23,4 +29,4 @@ add_library(rc_esdf
 add_executable(test_rc_esdf 
     main.cpp 
 )
-target_link_libraries(test_rc_esdf rc_esdf ${OpenCV_LIBS})
+target_link_libraries(test_rc_esdf rc_esdf ${OpenCV_LIBS} ${PCL_LIBRARIES})
