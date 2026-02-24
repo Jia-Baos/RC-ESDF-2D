@@ -20,61 +20,66 @@ int main()
     footprint.push_back(Eigen::Vector2d(-0.5, -0.3));
     footprint.push_back(Eigen::Vector2d(0.5, -0.3));
   
-    // 2. 初始化并生成 RC-ESDF
+    // 2. 初始化并生成基础 ESDF (机器人轮廓)
     RcEsdfMap rc_map;
-    rc_map.initialize(10.0, 10.0, 0.1); 
+    rc_map.initialize(5.0, 5.0, 0.1); 
     rc_map.generateFromPolygon(footprint);
 
+    // 3. 添加障碍物并更新 ESDF
+    std::cout << "\n=== 添加障碍物 ===" << std::endl;
+    std::vector<Eigen::Vector2d> obstacles;
+    obstacles.push_back(Eigen::Vector2d(1.0, 0.0));
+    obstacles.push_back(Eigen::Vector2d(1.5, 0.5));
+    obstacles.push_back(Eigen::Vector2d(-1.0, -0.5));
+    rc_map.addObstacles(obstacles);
+    rc_map.updateEsdfWithObstacles();
+
+    // 4. 查询测试
+    std::cout << "\n=== 查询测试 ===" << std::endl;
     std::vector<Eigen::Vector2d> obs_points_body;
-    for(int i = 0; i < 100;i++)
-    {
-        obs_points_body.push_back(Eigen::Vector2d(0.0, 0.0));
-        obs_points_body.push_back(Eigen::Vector2d(0.4, 0.2));
-        obs_points_body.push_back(Eigen::Vector2d(0.6, 0.6));
-        obs_points_body.push_back(Eigen::Vector2d(1, 1));
-    }
+    obs_points_body.push_back(Eigen::Vector2d(0.0, 0.0));
+    obs_points_body.push_back(Eigen::Vector2d(0.4, 0.2));
+    obs_points_body.push_back(Eigen::Vector2d(0.6, 0.6));
+    obs_points_body.push_back(Eigen::Vector2d(1.0, 0.0));
+    obs_points_body.push_back(Eigen::Vector2d(1.5, 0.5));
 
-    std::cout << "obs_points_body size: " << obs_points_body.size() << std::endl;
-
-    std::cout << "--- Query Test ---" << std::endl;
-
-    // [新增] 开始计时点
     auto start_time = std::chrono::high_resolution_clock::now();
 
     for (const auto& p : obs_points_body) {
         double dist;
         Eigen::Vector2d grad;
-        
-        // 核心查询函数
         bool in_box = rc_map.query(p, dist, grad);
-
-        // 为了演示输出结果（注意：IO操作会显著增加耗时，测纯算法性能时建议注释掉打印）
+        
         std::cout << "Point: (" << p.x() << ", " << p.y() << ") ";
         if (!in_box) {
-            std::cout << "-> Out of Box (Safe)" << std::endl;
+            std::cout << "-> Out of Box" << std::endl;
         } else {
-            std::cout << "-> Dist: " << dist 
-                      << " | Grad: (" << grad.x() << ", " << grad.y() << ")" << std::endl;
-            
+            std::cout << "-> Dist: " << dist << " | Grad: (" << grad.x() << ", " << grad.y() << ")";
             if (dist < 0) {
-                std::cout << "   [COLLISION] Push robot direction: (" 
-                          << -grad.x() << ", " << -grad.y() << ")" << std::endl;
+                std::cout << " [COLLISION]";
             }
+            std::cout << std::endl;
         }
     }
 
-    //结束计时点
     auto end_time = std::chrono::high_resolution_clock::now();
-    
-    //计算耗时
     std::chrono::duration<double, std::milli> elapsed_ms = end_time - start_time;
-    std::cout << "obs_points_body size: " << obs_points_body.size() << std::endl;
+    std::cout << "\nQuery Time: " << elapsed_ms.count() << " ms" << std::endl;
 
-    std::cout << "------------------------------------------------" << std::endl;
-    std::cout << "Total Loop Time: " << elapsed_ms.count() << " ms" << std::endl;
-    std::cout << "Avg Time per Point: " << elapsed_ms.count() / obs_points_body.size() << " ms" << std::endl;
+    // 5. 模拟障碍物动态更新
+    std::cout << "\n=== 动态更新障碍物 ===" << std::endl;
+    rc_map.clearObstacles();
+    rc_map.addObstacles({Eigen::Vector2d(2.0, 0.0), Eigen::Vector2d(1.5, 1.5)});
+    rc_map.updateEsdfWithObstacles();
+   
+    rc_map.visualizeEsdf(footprint);  // 注释掉可视化以便快速测试
+    
+    // // 移除范围内的障碍物
+    // std::cout << "\n=== 移除障碍物 (半径1.0) ===" << std::endl;
+    // rc_map.removeObstaclesInRadius(Eigen::Vector2d(2.0, 0.0), 1.0);
+    // rc_map.updateEsdfWithObstacles();
 
-    rc_map.visualizeEsdf(footprint);
+    // rc_map.visualizeEsdf(footprint);  // 注释掉可视化以便快速测试
 
     return 0;
 }

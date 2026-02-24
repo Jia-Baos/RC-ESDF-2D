@@ -70,6 +70,42 @@ public:
     void generateFromPolygon(const std::vector<Eigen::Vector2d>& polygon);
 
     /**
+     * @brief 添加单个障碍物点 (Body Frame)
+     * @param obs 障碍物点坐标
+     */
+    void addObstacle(const Eigen::Vector2d& obs);
+
+    /**
+     * @brief 批量添加障碍物点
+     * @param obs_list 障碍物点列表
+     */
+    void addObstacles(const std::vector<Eigen::Vector2d>& obs_list);
+
+    /**
+     * @brief 清除所有障碍物
+     */
+    void clearObstacles();
+
+    /**
+     * @brief 移除指定范围内的障碍物
+     * @param center 中心点
+     * @param radius 半径范围
+     */
+    void removeObstaclesInRadius(const Eigen::Vector2d& center, double radius);
+
+    /**
+     * @brief 更新障碍物后的ESDF (增量更新)
+     * 使用障碍物膨胀方法，距离为min(机器人距离, 障碍物距离)
+     */
+    void updateEsdfWithObstacles();
+
+    /**
+     * @brief 完全重新生成ESDF (机器人轮廓 + 障碍物)
+     * 当障碍物大幅变化时调用
+     */
+    void regenerateEsdf();
+
+    /**
      * @brief (在线阶段) 查询距离和梯度
      * 使用双线性插值 (Bilinear Interpolation)
      * 
@@ -106,6 +142,9 @@ private:
     int grid_size_x_, grid_size_y_;
     
     std::vector<float> data_; // 存储 SDF 值
+    std::vector<float> base_data_; // 机器人轮廓的基础ESDF
+    std::vector<Eigen::Vector2d> obstacles_; // 障碍物列表
+    std::vector<Eigen::Vector2d> robot_polygon_; // 机器人轮廓
 };
 
 #endif // RC_ESDF_H

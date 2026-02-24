@@ -101,6 +101,9 @@ void RcEsdfMap::visualizeEsdf(const std::vector<Eigen::Vector2d>& footprint) {
 }
 
 void RcEsdfMap::generateFromPolygon(const std::vector<Eigen::Vector2d>& polygon) {
+    robot_polygon_ = polygon;
+    base_data_.resize(grid_size_x_ * grid_size_y_);
+    
     // 遍历每一个格子
     for (int y = 0; y < grid_size_y_; ++y) {
         for (int x = 0; x < grid_size_x_; ++x) {
@@ -122,15 +125,16 @@ void RcEsdfMap::generateFromPolygon(const std::vector<Eigen::Vector2d>& polygon)
             // 2. 判断内部还是外部
             if (isPointInPolygon(p, polygon)) {
                 // 内部：存负距离
-                data_[y * grid_size_x_ + x] = -min_dist;
+                base_data_[y * grid_size_x_ + x] = -min_dist;
             } else {
-                // 外部：存 0 (根据论文设定)
-                // 如果你想做安全余量，这里可以存 min_dist
-                data_[y * grid_size_x_ + x] = min_dist; //0.0f;
+                // 外部：存正距离
+                base_data_[y * grid_size_x_ + x] = min_dist;
             }
         }
     }
-    std::cout << "[RC-ESDF] Map Generated. Size: " << grid_size_x_ << "x" << grid_size_y_ << std::endl;
+    
+    data_ = base_data_;
+    std::cout << "[RC-ESDF] Base ESDF Generated. Size: " << grid_size_x_ << "x" << grid_size_y_ << std::endl;
 }
 
 bool RcEsdfMap::query(const Eigen::Vector2d& pos_body, double& dist, Eigen::Vector2d& grad) const {
@@ -196,4 +200,68 @@ bool RcEsdfMap::isPointInPolygon(const Eigen::Vector2d& p, const std::vector<Eig
         }
     }
     return inside;
+}
+
+void RcEsdfMap::addObstacle(const Eigen::Vector2d& obs) {
+    obstacles_.push_back(obs);
+}
+
+void RcEsdfMap::addObstacles(const std::vector<Eigen::Vector2d>& obs_list) {
+    obstacles_.insert(obstacles_.end(), obs_list.begin(), obs_list.end());
+}
+
+void RcEsdfMap::clearObstacles() {
+    obstacles_.clear();
+    data_ = base_data_;
+}
+
+void RcEsdfMap::removeObstaclesInRadius(const Eigen::Vector2d& center, double radius) {
+    double radius_sq = radius * radius;
+    obstacles_.erase(
+        std::remove_if(obstacles_.begin(), obstacles_.end(),
+            [&](const Eigen::Vector2d& obs) {
+                return (obs - center).squaredNorm() < radius_sq;
+            }),
+        obstacles_.end()
+    );
+}
+
+void RcEsdfMap::updateEsdfWithObstacles() {
+    if (obstacles_.empty()) {
+        data_ = base_data_;
+        return;
+    }
+    
+    data_ = base_data_;
+    
+    for (int y = 0; y < grid_size_y_; ++y) {
+        for (int x = 0; x < grid_size_x_; ++x) {
+            double px = origin_x_ + (x + 0.5) * resolution_;
+            double py = origin_y_ + (y + 0.5) * resolution_;
+            Eigen::Vector2d p(px, py);
+            
+            double min_obs_dist_sq = std::numeric_limits<double>::max();
+            for (const auto& obs : obstacles_) {
+                double d_sq = (p - obs).squaredNorm();
+                if (d_sq < min_obs_dist_sq) min_obs_dist_sq = d_sq;
+            }
+            double min_obs_dist = std::sqrt(min_obs_dist_sq);
+            
+            float base_dist = base_data_[y * grid_size_x_ + x];
+            
+            if (min_obs_dist < std::abs(base_dist)) {
+                if (base_dist < 0) {
+                    data_[y * grid_size_x_ + x] = -min_obs_dist;
+                } else {
+                    data_[y * grid_size_x_ + x] = std::min(base_dist, static_cast<float>(min_obs_dist));
+                }
+            }
+        }
+    }
+    std::cout << "[RC-ESDF] ESDF Updated with " << obstacles_.size() << " obstacles" << std::endl;
+}
+
+void RcEsdfMap::regenerateEsdf() {
+    generateFromPolygon(robot_polygon_);
+    updateEsdfWithObstacles();
 }
